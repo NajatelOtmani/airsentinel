@@ -1,0 +1,85 @@
+{
+  "stations": [
+    {
+      "id": "LONDON_CT3",
+      "name": "London City of London - Sir John Cass School",
+      "type": "Urban Background",
+      "lat": 51.514,
+      "lon": -0.077,
+      "openaq_location_id": 225777
+    },
+    {
+      "id": "LONDON_SK6",
+      "name": "London Southwark - A2 Invaliders",
+      "type": "Roadside",
+      "lat": 51.491,
+      "lon": -0.102,
+      "openaq_location_id": 1414
+    },
+    {
+      "id": "LONDON_HF1",
+      "name": "London Hammersmith and Fulham",
+      "type": "Urban Background",
+      "lat": 51.490,
+      "lon": -0.224,
+      "openaq_location_id": 225723
+    },
+    {
+      "id": "LONDON_HIL",
+      "name": "London Hillingdon",
+      "type": "Suburban",
+      "lat": 51.496,
+      "lon": -0.460,
+      "openaq_location_id": 2182
+    },
+    {
+      "id": "LONDON_WL1",
+      "name": "London Waltham Forest",
+      "type": "Urban Background",
+      "lat": 51.585,
+      "lon": -0.012,
+      "openaq_location_id": 5145
+    },
+    {
+      "id": "LONDON_BX1",
+      "name": "London Bexley - Erith",
+      "type": "Suburban",
+      "lat": 51.481,
+      "lon": 0.181,
+      "openaq_location_id": 3238
+    },
+    {
+      "id": "LONDON_MY7",
+      "name": "London Marylebone Road",
+      "type": "Kerbside",
+      "lat": 51.522,
+      "lon": -0.154,
+      "openaq_location_id": 1105
+    },
+    {
+      "id": "LONDON_KC1",
+      "name": "London N. Kensington",
+      "type": "Urban Background",
+      "lat": 51.521,
+      "lon": -0.213,
+      "openaq_location_id": 2178
+    },
+    {
+      "id": "LONDON_TH4",
+      "name": "London Tower Hamlets - Mile End Road",
+      "type": "Roadside",
+      "lat": 51.524,
+      "lon": -0.033,
+      "openaq_location_id": 1423
+    },
+    {
+      "id": "LONDON_GR9",
+      "name": "London Greenwich - Westhorne Avenue",
+      "type": "Roadside",
+      "lat": 51.455,
+      "lon": 0.030,
+      "openaq_location_id": 3241
+    }
+
+  ]
+}

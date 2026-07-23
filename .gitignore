@@ -1,0 +1,6 @@
+.env
+.venv/
+mlruns/
+mlflow.db
+*.png
+*.pdf
