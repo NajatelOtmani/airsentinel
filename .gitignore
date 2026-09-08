@@ -4,3 +4,6 @@ mlruns/
 mlflow.db
 *.png
 *.pdf
+# Append to .gitignore
+data/*.csv
+data/

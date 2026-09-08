@@ -39,7 +39,10 @@ class OpenAQClient:
             return {}
 
         sensor_map = {
-            sensor["id"]: sensor["parameter"]["name"]
+            sensor["id"]: {
+                "name": sensor["parameter"]["name"],
+                "unit": sensor["parameter"]["units"],
+            }
             for sensor in results[0].get("sensors", [])
         }
         self._sensor_maps[location_id] = sensor_map
@@ -82,11 +85,15 @@ class OpenAQClient:
             }
 
             for reading in results:
-                param_name = sensor_map.get(reading.get("sensorsId"))
+                sensor_info = sensor_map.get(reading.get("sensorsId"))
+                if not sensor_info:
+                    continue
+                param_name = sensor_info["name"]
                 if param_name in flattened_payload:
-                    flattened_payload[param_name] = float(reading["value"])
-                if not flattened_payload["timestamp"]:
-                    flattened_payload["timestamp"] = reading["datetime"]["utc"]
+                    value = float(reading["value"])
+                    if param_name == "co" and sensor_info["unit"] == "ppm":
+                        value *= 1.145  # normalize ppm -> µg/m³ at standard conditions
+                    flattened_payload[param_name] = value
 
             if not flattened_payload["timestamp"]:
                 flattened_payload["timestamp"] = datetime.utcnow().isoformat() + "Z"

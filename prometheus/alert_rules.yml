@@ -1,0 +1,20 @@
+groups:
+  - name: airsentinel_alerts
+    rules:
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency > 2s"
+          description: "95th percentile request latency has exceeded 2 seconds for 2 minutes."
+
+      - alert: HighLLMErrorRate
+        expr: sum(rate(airsentinel_llm_requests_total{status="error"}[5m])) / sum(rate(airsentinel_llm_requests_total[5m])) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM error rate > 10%"
+          description: "More than 10% of LLM requests are failing over the last 5 minutes."

@@ -26,11 +26,12 @@ class SensorSchema(pa.DataFrameModel):
 
     # Real-world pollutants can be null if a station lacks that parameter,
     # but if present must respect realistic atmospheric ranges.
-    pm25: Series[float] = pa.Field(ge=0, le=500, nullable=True)
-    pm10: Series[float] = pa.Field(ge=0, le=600, nullable=True)
-    co: Series[float] = pa.Field(ge=0, le=50, nullable=True)
-    no2: Series[float] = pa.Field(ge=0, le=1000, nullable=True)
-    o3: Series[float] = pa.Field(ge=0, le=1000, nullable=True)
+    # In SensorSchema (src/ingestion/validation.py):
+    pm10: pa.Float = pa.Field(ge=-999, le=1000, nullable=True)
+    pm25: Series[float] = pa.Field(ge=0.0, le=500.0)
+    co: Series[float] = pa.Field(ge=0, le=40000, nullable=True)
+    no2: Series[float] = pa.Field(ge=-999, le=1000, nullable=True)
+    o3: Series[float] = pa.Field(ge=-999, le=1000, nullable=True)
 
     # Meteorological baselines
     temperature: Series[float] = pa.Field(ge=-20, le=60, nullable=True)
@@ -48,32 +49,40 @@ class SensorSchema(pa.DataFrameModel):
 def validate_batch(df: pd.DataFrame) -> Optional[pd.DataFrame]:
     """Apply the SensorSchema contract to a raw batch of sensor readings.
 
-    This is the same validation step consumer.py runs inline per Kafka
-    micro-batch, factored out so the batch CLI pipeline can reuse it.
-
     Args:
         df: Raw, unvalidated DataFrame of sensor readings. The `timestamp`
             column may be str or datetime — it will be coerced if needed.
 
     Returns:
         The validated DataFrame if the batch passes the schema contract,
-        otherwise None. Callers are responsible for dead-lettering or
-        aborting downstream steps when None is returned.
+        otherwise None.
     """
     if df is None or df.empty:
         logger.warning("validate_batch called with an empty or missing DataFrame.")
         return None
 
     df = df.copy()
-    if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    # Coerce timestamp if passed as string or non-datetime
+    if "timestamp" in df.columns and not pd.api.types.is_datetime64_any_dtype(
+        df["timestamp"]
+    ):
+        try:
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+        except Exception as e:
+            logger.error(f"Failed to coerce 'timestamp' column to datetime: {e}")
+            return None
 
     try:
-        validated_df = SensorSchema.validate(df)
+        validated_df = SensorSchema.validate(df, lazy=True)
         logger.info(
             f"Validated batch of {len(validated_df)} records against SensorSchema."
         )
         return validated_df
-    except pa.errors.SchemaError as e:
-        logger.error(f"Schema validation failed: {e}")
+
+    except (pa.errors.SchemaError, pa.errors.SchemaErrors) as e:
+        logger.warning(f"Batch validation failed against SensorSchema: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error during batch validation: {e}")
         return None

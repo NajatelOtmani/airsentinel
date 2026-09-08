@@ -1,0 +1,4 @@
+model,precision,recall,f1_score,roc_auc,pr_auc,f1_diff_vs_baseline,pct_improvement_f1
+Isolation Forest Baseline,0.31746031746031744,0.8,0.45454545454545453,0.9033666666666668,0.6341067995087283,0.0,0.0
+LSTM Autoencoder,1.0,1.0,1.0,1.0,1.0,0.5454545454545454,120.0
+Transformer Forecaster,1.0,1.0,1.0,1.0,1.0,0.5454545454545454,120.0

@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     # --- MLOps Settings (MLflow) ---
     MLFLOW_TRACKING_URI: str = Field(default="http://localhost:5000")
 
+    # --- Auth Settings (JWT) ---
+    JWT_SECRET_KEY: str = Field(default="CHANGE_ME_IN_ENV")
+    JWT_ALGORITHM: str = Field(default="HS256")
+    JWT_EXPIRE_MINUTES: int = Field(default=60)
+    ADMIN_USERNAME: str = Field(default="admin")
+    ADMIN_PASSWORD_HASH: str = Field(default="")
+
     # --- Compiled Connection Helpers ---
     @property
     def database_url(self) -> str:

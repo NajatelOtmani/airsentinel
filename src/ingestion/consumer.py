@@ -14,6 +14,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from features.engineering import AirQualityFeatureEngineer
 from ingestion.validation import SensorSchema
 
+# Project relative path to data/processed_sensor_data.csv
+PROCESSED_DATA_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data",
+    "processed_sensor_data.csv",
+)
 # Setup logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -45,10 +51,20 @@ def process_batch(raw_messages):
         return None
 
     # Convert batch to DataFrame for vectorized validation
+    # Convert batch to DataFrame for vectorized validation
     df = pd.DataFrame(parsed_records)
 
     # Crucial step: cast string timestamps to actual pandas datetime objects
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], format="ISO8601", utc=True)
+
+    # Impute missing pm25 within this micro-batch before schema validation
+    if "pm25" in df.columns and df["pm25"].isna().any():
+        n_missing = df["pm25"].isna().sum()
+        logger.warning(
+            f"⚠️ {n_missing} record(s) missing pm25 — imputing via batch median."
+        )
+        df["pm25"] = df["pm25"].fillna(df["pm25"].median())
+        df["pm25"] = df["pm25"].fillna(0.0)  # fallback if entire batch was NaN
 
     try:
         # Validate data against the Pandera contract model
@@ -64,6 +80,26 @@ def process_batch(raw_messages):
             f"❌ Schema validation failed for batch! Sending to dead-letter pipeline. Error: {str(e)}"
         )
         return None
+
+
+def persist_features(enriched_df: pd.DataFrame) -> None:
+    """Appends enriched feature rows to the rolling training CSV, writing a header only once."""
+    if enriched_df.empty:
+        logger.warning("Attempted to persist an empty DataFrame. Skipping.")
+        return
+
+    # Ensure the 'data/' folder exists
+    os.makedirs(os.path.dirname(PROCESSED_DATA_PATH), exist_ok=True)
+    file_exists = os.path.isfile(PROCESSED_DATA_PATH)
+
+    # Append to CSV (write header only if file is brand new)
+    enriched_df.to_csv(
+        PROCESSED_DATA_PATH,
+        mode="a",
+        header=not file_exists,
+        index=False,
+    )
+    logger.info(f"💾 Appended {len(enriched_df)} rows to {PROCESSED_DATA_PATH}")
 
 
 def main():
@@ -120,6 +156,7 @@ def main():
                         logger.info(
                             f"Columns in Enriched DF: {list(enriched_data.columns)}"
                         )
+                        persist_features(enriched_data)
 
                         # Next Step: db_writer.bulk_insert(enriched_data) will go here!
 
