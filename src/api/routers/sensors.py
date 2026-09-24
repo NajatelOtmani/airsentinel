@@ -23,13 +23,13 @@ def _clean_row(row: pd.Series) -> dict:
 
 
 @router.get("/")
-async def list_sensors(user: str = Depends(get_current_user)):
+async def get_sensors():
     df = load_data()
     return {"sensors": sorted(df["location_id"].dropna().unique().tolist())}
 
 
 @router.get("/{location_id}/latest")
-async def latest_reading(location_id: str, user: str = Depends(get_current_user)):
+async def latest_reading(location_id: str):
     df = load_data()
     subset = df[df["location_id"] == location_id].sort_values(
         "timestamp", ascending=False

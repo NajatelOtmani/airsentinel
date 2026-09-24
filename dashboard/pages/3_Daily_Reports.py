@@ -1,7 +1,8 @@
 import json
 import re
 from pathlib import Path
-
+from styles import inject_css, markdown_to_html
+inject_css()
 import streamlit as st
 from api_client import ensure_logged_in, get, post
 from fpdf import FPDF
@@ -11,7 +12,8 @@ st.set_page_config(page_title="AirSentinel — Daily Reports", layout="wide")
 if not ensure_logged_in():
     st.stop()
 
-st.title("📄 Daily Reports")
+from styles import page_header
+page_header("Automated · Daily", "Daily Reports", "AI-synthesized environmental briefings per zone")
 
 REPORTS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "reports"
 # --- Sensor selector ---
@@ -29,8 +31,15 @@ with col1:
     if st.button("🔄 Generate New Report"):
         with st.spinner("Generating report via AI agent..."):
             try:
-                post(f"/api/v1/reports/{selected}")
-                st.success("Report generated!")
+                response = post(f"/api/v1/reports/{selected}")
+                if response.get("status") == "success":
+                    st.success("Report generated!")
+                else:
+                    st.error(
+                        "Report generation failed: "
+                        f"{response.get('error', 'unknown error')}"
+                    )
+                # The result above already reports success or failure.
             except Exception as e:
                 st.error(f"Report generation failed: {e}")
 
@@ -54,31 +63,28 @@ if report_data.get("status") != "success" or not markdown_content:
     )
     st.stop()
 
-st.markdown(markdown_content)
+st.markdown(f'<div class="report-card">{markdown_to_html(markdown_content)}</div>', unsafe_allow_html=True)
 
 # --- PDF export ---
+# --- PDF export ---
 UNICODE_REPLACEMENTS = {
-    "\u2013": "-",
-    "\u2014": "--",
-    "\u2018": "'",
-    "\u2019": "'",
-    "\u201c": '"',
-    "\u201d": '"',
-    "\u202f": " ",
-    "\u00a0": " ",
-    "\u2192": "->",
-    "\u2011": "-",
-    "\u00b5": "u",
-    "\u00b2": "2",
-    "\u00b3": "3",
-    "\u2026": "...",
+    "\u2013": "-", "\u2014": "--", "\u2018": "'", "\u2019": "'",
+    "\u201c": '"', "\u201d": '"', "\u202f": " ", "\u00a0": " ",
+    "\u2192": "->", "\u2011": "-",
+    "\u00b5": "u", "\u03bc": "u",      # micro sign AND greek mu — both used interchangeably by LLMs
+    "\u00b2": "2", "\u00b3": "3",
+    "\u2026": "...", "\u2022": "-",
+    "\u2264": "<=", "\u2265": ">=",
+    "\u00d7": "x", "\u00f7": "/",
+    "\u00b0": " deg",
 }
 
 
 def clean_unicode(text: str) -> str:
     for old, new in UNICODE_REPLACEMENTS.items():
         text = text.replace(old, new)
-    return text.encode("latin-1", "replace").decode("latin-1")
+    # Drop any remaining unsupported characters silently instead of leaving "?" artifacts
+    return text.encode("latin-1", "ignore").decode("latin-1")
 
 
 def parse_markdown_lines(text: str):
@@ -88,25 +94,47 @@ def parse_markdown_lines(text: str):
         line = raw_line.strip()
         if not line or line == "---":
             yield ("blank", "")
-        elif re.match(r"^#{1,3}\s+", line):
+            continue
+
+        m = re.match(r"^#{1,3}\s+", line)
+        if m:
             level = len(re.match(r"^(#{1,3})", line).group(1))
-            content = re.sub(r"^#{1,3}\s+", "", line)
-            content = content.replace("**", "")
+            content = re.sub(r"^#{1,3}\s+", "", line).replace("**", "")
             yield (f"heading{level}", content)
-        elif re.match(r"^\|[\s\-:|]+\|$", line):
+            continue
+
+        # A line that is ENTIRELY bold (e.g. "**Executive Summary**") acts as a section heading
+        # even without a # marker — this is how the LLM formats its section titles.
+        bold_only = re.match(r"^\*\*(.+?)\*\*:?$", line)
+        if bold_only:
+            yield ("heading2", bold_only.group(1))
+            continue
+
+        if re.match(r"^\|[\s\-:|]+\|$", line):
             continue  # skip separator rows
-        elif line.startswith("|") and line.endswith("|"):
+
+        if line.startswith("|") and line.endswith("|"):
             cells = [c.strip().replace("**", "") for c in line.strip("|").split("|")]
             yield ("table_row", cells)
-        elif re.match(r"^[-*]\s+", line):
+            continue
+
+        if re.match(r"^[-*]\s+", line):
             content = re.sub(r"^[-*]\s+", "", line).replace("**", "").replace("*", "")
             yield ("bullet", content)
-        elif re.match(r"^\s{2,}[-*]\s+", raw_line):
+            continue
+
+        if re.match(r"^\d+\.\s+", line):
+            content = re.sub(r"^\d+\.\s+", "", line).replace("**", "").replace("*", "")
+            yield ("bullet", content)
+            continue
+
+        if re.match(r"^\s{2,}[-*]\s+", raw_line):
             content = re.sub(r"^[-*]\s+", "", line).replace("**", "").replace("*", "")
             yield ("sub_bullet", content)
-        else:
-            content = line.replace("**", "").replace("*", "")
-            yield ("paragraph", content)
+            continue
+
+        content = re.sub(r"\*\*(.+?)\*\*", r"\1", line)  # inline bold -> plain (font weight handled separately)
+        yield ("paragraph", content)
 
 
 def markdown_to_pdf(markdown_content: str) -> bytes:
@@ -126,11 +154,8 @@ def markdown_to_pdf(markdown_content: str) -> bytes:
             return
         n_cols = max(len(row) for row in table_buffer)
         col_width = max_width / n_cols
-        pdf.set_font("Helvetica", "B", 9)
         for i, row in enumerate(table_buffer):
             row = row + [""] * (n_cols - len(row))
-            if i == 1 and all(set(c) <= {"-", ":", ""} for c in row):
-                continue
             pdf.set_font("Helvetica", "B" if i == 0 else "", 9)
             y_before = pdf.get_y()
             x_start = pdf.l_margin
@@ -142,7 +167,7 @@ def markdown_to_pdf(markdown_content: str) -> bytes:
                 x_start += col_width
             pdf.set_xy(pdf.l_margin, y_before + max_h)
         table_buffer = []
-        pdf.ln(3)
+        pdf.ln(4)
 
     for kind, content in parse_markdown_lines(text):
         if kind != "table_row":
@@ -151,13 +176,19 @@ def markdown_to_pdf(markdown_content: str) -> bytes:
         if kind == "blank":
             pdf.ln(3)
         elif kind == "heading1":
-            pdf.set_font("Helvetica", "B", 15)
-            pdf.multi_cell(max_width, 8, content)
+            pdf.ln(2)
+            pdf.set_font("Helvetica", "B", 16)
+            pdf.set_text_color(20, 96, 107)
+            pdf.multi_cell(max_width, 9, content)
+            pdf.set_text_color(0, 0, 0)
             pdf.ln(2)
         elif kind == "heading2":
+            pdf.ln(3)
             pdf.set_font("Helvetica", "B", 13)
-            pdf.multi_cell(max_width, 7, content)
-            pdf.ln(2)
+            pdf.set_text_color(20, 96, 107)
+            pdf.multi_cell(max_width, 8, content)
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(1)
         elif kind == "heading3":
             pdf.set_font("Helvetica", "B", 11)
             pdf.multi_cell(max_width, 6, content)
@@ -175,6 +206,7 @@ def markdown_to_pdf(markdown_content: str) -> bytes:
         else:  # paragraph
             pdf.set_font("Helvetica", "", 10)
             pdf.multi_cell(max_width, 6, content)
+            pdf.ln(1)
 
     flush_table()
     return bytes(pdf.output())

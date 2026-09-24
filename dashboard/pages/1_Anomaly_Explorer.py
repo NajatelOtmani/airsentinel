@@ -6,10 +6,9 @@ st.set_page_config(page_title="AirSentinel — Anomaly Explorer", layout="wide")
 
 if not ensure_logged_in():
     st.stop()
-
-st.title("🔍 Anomaly Explorer")
-
-# --- Sensor selector ---
+from styles import inject_css, page_header
+inject_css()
+page_header("Detection · Live", "Anomaly Explorer", "Filterable anomaly log with SHAP explainability")
 try:
     sensors_resp = get("/api/v1/sensors/")
     sensor_ids = sensors_resp.get("sensors", [])
@@ -23,7 +22,6 @@ if not sensor_ids:
 
 selected = st.selectbox("Select sensor", sensor_ids)
 
-# --- Fetch anomalies for selected sensor ---
 try:
     resp = get(f"/api/v1/anomalies/{selected}", params={"limit": 100})
     anomalies = resp.get("anomalies", [])
@@ -38,7 +36,6 @@ if not anomalies:
 else:
     df = pd.DataFrame(anomalies)
 
-    # --- Filterable table ---
     col1, col2 = st.columns(2)
     with col1:
         min_pm25 = st.slider(
@@ -62,7 +59,6 @@ else:
 
     st.dataframe(filtered, use_container_width=True)
 
-    # --- Reconstruction error chart (if column exists) ---
     st.subheader("Reconstruction Error Over Time")
     if "label_residual" in filtered.columns and "timestamp" in filtered.columns:
         chart_df = filtered[["timestamp", "label_residual"]].sort_values("timestamp")
@@ -70,12 +66,9 @@ else:
     else:
         st.info("No reconstruction error data available for this view.")
 
-# --- SHAP waterfall (from your Day 7-10 explainability assets) ---
 st.subheader("SHAP Feature Importance")
 shap_path = "reports/figures/shap_waterfall.png"
 try:
     st.image(shap_path, caption="SHAP Feature Importance (from latest model run)")
 except Exception:
-    st.info(
-        "SHAP waterfall image not found. Run the explainability pipeline (run_pipeline.py) to generate it."
-    )
+    st.info("SHAP waterfall image not found.")

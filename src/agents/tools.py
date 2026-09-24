@@ -3,11 +3,12 @@ src/agents/tools.py
 ===================
 DAY 13 — ReAct Agent Tools
 --------------------------
-4 Custom Tools tailored for AirSentinel:
+5 Custom Tools tailored for AirSentinel:
   1. query_anomaly_db: Query anomaly events in data/processed_sensor_data.csv
   2. get_sensor_forecast: Query ONNX model or rolling averages for 12h forecast
   3. search_env_documents: Search FAISS vector store
   4. compute_zone_statistics: Compute rolling PM2.5/AQI metrics by location_id
+  5. get_network_summary: Compute high-level network wide summary across all stations
 """
 
 from pathlib import Path
@@ -28,9 +29,6 @@ class AnomalyQueryInput(BaseModel):
     hours: int = Field(default=3, description="Lookback window in hours")
 
 
-# In src/agents/tools.py
-
-
 @tool("query_anomaly_db", args_schema=AnomalyQueryInput)
 def query_anomaly_db(location_id: str, hours: int = 3) -> str:
     """Fetch recent anomaly events for a given location_id from processed_sensor_data.csv."""
@@ -38,7 +36,7 @@ def query_anomaly_db(location_id: str, hours: int = 3) -> str:
         return "Error: Processed data CSV not found."
 
     df = pd.read_csv(CSV_PATH, on_bad_lines="skip")
-    filtered = df[df["location_id"].str.contains(location_id, case=False, na=False)]
+    filtered = df[df["location_id"].str.contains(location_id, case=False, na=False, regex=False)]
     if filtered.empty:
         return f"No sensor or anomaly records exist in the database for location '{location_id}'. Continue with statistical and document tools."
 
@@ -101,8 +99,6 @@ def get_sensor_forecast(location_id: str) -> str:
 
 # ── 3. Search Environmental Documents ────────────────────────────────────────
 
-# ── 3. Search Environmental Documents ────────────────────────────────────────
-
 
 class DocumentSearchInput(BaseModel):
     query: str = Field(
@@ -124,7 +120,6 @@ def search_env_documents(query: str, k: int = 1) -> str:
 
         snippets = []
         for r in results:
-            # Handle LangChain Document object attributes (.page_content & .metadata)
             content = getattr(r, "page_content", str(r))[:120]
             metadata = getattr(r, "metadata", {})
             src = metadata.get("source", "WHO/EPA Guidelines")
@@ -167,3 +162,64 @@ def compute_zone_statistics(location_id: str) -> str:
         "total_anomalies": int(filtered["is_anomaly"].sum()),
     }
     return f"Zone Statistics for {location_id}: {stats}"
+
+
+# ── 5. Get Network Summary ───────────────────────────────────────────────────
+
+# Add this to src/agents/tools.py, alongside your existing 4 tools.
+
+class NetworkSummaryInput(BaseModel):
+    hours: int = Field(default=24, description="Lookback window in hours")
+
+
+@tool("get_network_summary", args_schema=NetworkSummaryInput)
+def get_network_summary(hours: int = 24) -> str:
+    """Useful to get a high-level summary of PM2.5, PM10, AQI, and anomalies across all stations in the network at once."""
+    if not CSV_PATH.exists():
+        return "Error: Processed CSV not found."
+
+    try:
+        df = pd.read_csv(CSV_PATH, on_bad_lines="skip")
+        if df.empty:
+            return "No sensor records found in network data."
+
+        # Get latest record for each location_id
+        latest_df = df.sort_values("timestamp").groupby("location_id").last().reset_index()
+
+        summary_rows = []
+        for _, row in latest_df.iterrows():
+            loc = row["location_id"]
+            pm25 = row.get("pm25", "N/A")
+            aqi = row.get("epa_aqi", "N/A")
+            cat = row.get("aqi_category", "N/A")
+            summary_rows.append(f"Location {loc}: PM2.5={pm25}, AQI={aqi} ({cat})")
+
+        return "Network-Wide Latest Summary:\n" + "\n".join(summary_rows)
+    except Exception as e:
+        return f"Error building network summary: {str(e)}"
+
+@tool("get_network_summary", args_schema=NetworkSummaryInput)
+def get_network_summary(dummy: str = "") -> str:
+    """Useful to get a high-level summary of PM2.5, PM10, AQI, and anomalies across all stations in the network at once."""
+    if not CSV_PATH.exists():
+        return "Error: Processed CSV not found."
+
+    try:
+        df = pd.read_csv(CSV_PATH, on_bad_lines="skip")
+        if df.empty:
+            return "No sensor records found in network data."
+
+        # Get latest record for each location_id
+        latest_df = df.sort_values("timestamp").groupby("location_id").last().reset_index()
+
+        summary_rows = []
+        for _, row in latest_df.iterrows():
+            loc = row["location_id"]
+            pm25 = row.get("pm25", "N/A")
+            aqi = row.get("epa_aqi", "N/A")
+            cat = row.get("aqi_category", "N/A")
+            summary_rows.append(f"Location {loc}: PM2.5={pm25}, AQI={aqi} ({cat})")
+
+        return "Network-Wide Latest Summary:\n" + "\n".join(summary_rows)
+    except Exception as e:
+        return f"Error building network summary: {str(e)}"

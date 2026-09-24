@@ -11,11 +11,15 @@ from src.config import settings
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+# src/api/auth.py
+# src/api/auth.py
+
 def verify_credentials(username: str, password: str) -> bool:
     if username != settings.ADMIN_USERNAME:
         return False
 
-    # Direct bcrypt verification without passlib wrapper
+  
+    # Option B: Bcrypt hash check against settings.ADMIN_PASSWORD_HASH
     try:
         password_bytes = password.encode("utf-8")
         hash_bytes = settings.ADMIN_PASSWORD_HASH.encode("utf-8")

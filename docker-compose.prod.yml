@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
     env_file: .env
     environment:
       DB_HOST: postgres
@@ -21,6 +22,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dashboard
+    command: streamlit run dashboard/app.py --server.port=8501 --server.address=0.0.0.0 --server.baseUrlPath=AI_Analyst_Chat
     env_file: .env
     environment:
       API_BASE_URL: http://api:8000
@@ -30,7 +32,6 @@ services:
       - "8501"
     volumes:
       - ./data:/app/data
-
   nginx:
     image: nginx:alpine
     ports:
