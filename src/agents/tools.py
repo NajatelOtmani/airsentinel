@@ -36,7 +36,9 @@ def query_anomaly_db(location_id: str, hours: int = 3) -> str:
         return "Error: Processed data CSV not found."
 
     df = pd.read_csv(CSV_PATH, on_bad_lines="skip")
-    filtered = df[df["location_id"].str.contains(location_id, case=False, na=False, regex=False)]
+    filtered = df[
+        df["location_id"].str.contains(location_id, case=False, na=False, regex=False)
+    ]
     if filtered.empty:
         return f"No sensor or anomaly records exist in the database for location '{location_id}'. Continue with statistical and document tools."
 
@@ -166,7 +168,6 @@ def compute_zone_statistics(location_id: str) -> str:
 
 # ── 5. Get Network Summary ───────────────────────────────────────────────────
 
-# Add this to src/agents/tools.py, alongside your existing 4 tools.
 
 class NetworkSummaryInput(BaseModel):
     hours: int = Field(default=24, description="Lookback window in hours")
@@ -174,7 +175,7 @@ class NetworkSummaryInput(BaseModel):
 
 @tool("get_network_summary", args_schema=NetworkSummaryInput)
 def get_network_summary(hours: int = 24) -> str:
-    """Useful to get a high-level summary of PM2.5, PM10, AQI, and anomalies across all stations in the network at once."""
+    """Get a network-wide summary of PM2.5, AQI and anomaly counts across all stations."""
     if not CSV_PATH.exists():
         return "Error: Processed CSV not found."
 
@@ -183,43 +184,32 @@ def get_network_summary(hours: int = 24) -> str:
         if df.empty:
             return "No sensor records found in network data."
 
-        # Get latest record for each location_id
-        latest_df = df.sort_values("timestamp").groupby("location_id").last().reset_index()
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+        df = df.dropna(subset=["timestamp"]).sort_values("timestamp")
 
-        summary_rows = []
-        for _, row in latest_df.iterrows():
+        # Window is relative to the newest reading, so it still works if data is a few hours old
+        cutoff = df["timestamp"].max() - pd.Timedelta(hours=hours)
+        window = df[df["timestamp"] >= cutoff]
+        if window.empty:
+            window = df
+
+        anomaly_counts = (
+            window.groupby("location_id")["is_anomaly"].sum()
+            if "is_anomaly" in window.columns
+            else {}
+        )
+        latest = window.drop_duplicates(subset="location_id", keep="last")
+
+        rows = []
+        for _, row in latest.iterrows():
             loc = row["location_id"]
-            pm25 = row.get("pm25", "N/A")
-            aqi = row.get("epa_aqi", "N/A")
-            cat = row.get("aqi_category", "N/A")
-            summary_rows.append(f"Location {loc}: PM2.5={pm25}, AQI={aqi} ({cat})")
+            n_anom = int(anomaly_counts.get(loc, 0)) if len(anomaly_counts) else 0
+            rows.append(
+                f"{loc}: PM2.5={row.get('pm25', 'N/A')}, "
+                f"AQI={row.get('epa_aqi', 'N/A')} ({row.get('aqi_category', 'N/A')}), "
+                f"anomalies in last {hours}h={n_anom}"
+            )
 
-        return "Network-Wide Latest Summary:\n" + "\n".join(summary_rows)
+        return f"Network summary (last {hours}h):\n" + "\n".join(rows)
     except Exception as e:
-        return f"Error building network summary: {str(e)}"
-
-@tool("get_network_summary", args_schema=NetworkSummaryInput)
-def get_network_summary(dummy: str = "") -> str:
-    """Useful to get a high-level summary of PM2.5, PM10, AQI, and anomalies across all stations in the network at once."""
-    if not CSV_PATH.exists():
-        return "Error: Processed CSV not found."
-
-    try:
-        df = pd.read_csv(CSV_PATH, on_bad_lines="skip")
-        if df.empty:
-            return "No sensor records found in network data."
-
-        # Get latest record for each location_id
-        latest_df = df.sort_values("timestamp").groupby("location_id").last().reset_index()
-
-        summary_rows = []
-        for _, row in latest_df.iterrows():
-            loc = row["location_id"]
-            pm25 = row.get("pm25", "N/A")
-            aqi = row.get("epa_aqi", "N/A")
-            cat = row.get("aqi_category", "N/A")
-            summary_rows.append(f"Location {loc}: PM2.5={pm25}, AQI={aqi} ({cat})")
-
-        return "Network-Wide Latest Summary:\n" + "\n".join(summary_rows)
-    except Exception as e:
-        return f"Error building network summary: {str(e)}"
+        return f"Error building network summary: {e}"
