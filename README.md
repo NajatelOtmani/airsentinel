@@ -1,34 +1,12 @@
-AirSentinel — Environmental Anomaly & Reporting System
-AirSentinel is an end-to-end environmental data monitoring platform. It collects sensor metrics, detects anomalies using autoencoders, predicts short-term trends with ONNX-exported Transformer forecasters, and automatically generates analytical reports using an AI agent.
+🌍 AirSentinel — Environmental Anomaly & Reporting System   Live Public Demo: airsentinel-yutrmgqumexfecobwsbank.streamlit.app   📌 Executive SummaryAirSentinel is an end-to-end, production-grade environmental data monitoring platform designed to analyze air quality telemetry in real time. The platform ingests stream data from distributed sensor networks, detects atmospheric anomalies using deep autoencoders, generates sub-12-hour predictive trend forecasts via ONNX-exported Transformer models, and synthesizes analytical air quality reports using an autonomous LangChain ReAct agent.🛠️ System ArchitectureThe platform follows a decoupled, microservice-oriented architecture suitable for both distributed cloud environments and containerized edge deployments:Data Ingestion Pipeline: Kafka-based real-time ingestion layer capturing continuous telemetry across sensor locations (e.g., LONDON_GR9, LONDON_HIL, LONDON_HF1).Anomaly Detection & Forecasting: PyTorch Autoencoders and Transformer architectures exported to ONNX Runtime for sub-millisecond, low-latency inference.Backend REST API: FastAPI application providing asynchronous endpoints, background job orchestration, and database query handling.AI Agent & Report Synthesis: LangChain ReAct agent powered by Groq LPUs (ChatGroq) capable of autonomously querying anomaly store records, cross-referencing WHO atmospheric threshold guidelines, and summarizing trend metrics.Interactive Dashboard: Dual-mode Streamlit UI featuring 3D PyDeck spatial mapping, real-time telemetry graphing, and automated PDF report generation.🚀 Deployment Modes1. Cloud Standalone Mode (Public Demo)To host the platform continuously without requiring persistent local hardware, AirSentinel runs on Streamlit Community Cloud in Standalone Mode.Backend Strategy: Decouples the UI from HTTP API endpoints by executing the ReAct agent and trend processing logic directly in-process against localized sensor datasets (data/processed_sensor_data.csv).Access Link: https://airsentinel-yutrmgqumexfecobwsbank.streamlit.app   2. Full Containerized Production Stack (Local Engine)Runs the complete streaming stack including Kafka, Redis, PostgreSQL/TimescaleDB, FastAPI, Nginx, Prometheus, and Grafana.Bash# Clone repository
+git clone https://github.com/NajatelOtmani/airsentinel.git
+cd airsentinel
 
-🛠️ System Architecture
-Data Ingestion: Kafka pipeline capturing real-time air quality metrics across sensor networks (e.g., LONDON_GR9, LONDON_HIL).
-
-Anomaly Detection & Forecasting: PyTorch Autoencoders and Transformer models running via ONNX runtime for sub-12h predictions.
-
-Backend API: FastAPI application executing background tasks and managing sensor data storage.
-
-AI Report Generation: LangChain-based ReAct agent using the Groq API (ChatGroq) to query live anomaly databases, WHO guidelines, and forecasting metrics.
-
-Dashboard: Streamlit user interface for live metric visualization and report triggers.
-
-⚠️ Known Issue & Investigation Status
-Current Status: AI Model Selection Error (404 Model Not Found)
-During automated report generation via the Streamlit dashboard, certain sensor requests (LONDON_GR9, LONDON_HIL) fail during the ReAct reasoning step with the following error:
-
-Report generation failed: Error code: 404 - 
+# Spin up complete microservice stack
+docker compose -f docker-compose.prod.yml up -d --build
+⚠️ Known Issue & Investigation StatusCurrent Status: AI Model Endpoint Migration (404 Model Not Found)During automated report generation via the ReAct agent for specific sensor nodes (e.g., LONDON_GR9, LONDON_HIL), execution halts during the reasoning chain with the following response:JSONReport generation failed: Error code: 404 - 
 {'error': {'message': 'The model llama-3.3-70b-versatile does not exist or you do not have access to it.', 
  'type': 'invalid_request_error', 'code': 'model_not_found'}}
-Root Cause Analysis
-Model Retirement: The llama-3.3-70b-versatile endpoint previously specified in the agent default configuration has been deprecated/retired on the Groq provider API.
-
-Fallback Resolution: When the API layer passes model_name=None or empty arguments, internal library fallbacks in langchain_groq default back to the deprecated model string.
-
-Container Context: The Dockerized FastAPI backend retains cached environment configurations that override local parameter updates.
-
-🔧 Planned Fix & Work in Progress
-Agent Model Override: Refactoring src/agents/react_agent.py to strictly enforce the active llama-3.1-8b-instant model across all agent initialization paths.
-
-Provider Alignment: Setting provider="groq" as the global default across AutoReportGenerator (src/agents/report_generator.py) and API routers (src/api/routers/reports.py).
-
-Container Environment Update: Rebuilding the production Docker API container (docker-compose.prod.yml) with --no-cache to propagate the updated parameters.
+Root Cause AnalysisModel Deprecation: The upstream Groq provider API retired the legacy model identifier (llama-3.3-70b-versatile).Fallback Cascading: When default arguments or empty strings are passed during agent initialization, underlying langchain_groq bindings fall back to the deprecated model identifier.Container State Caching: In local Docker environments, cached environment layers override parameter updates until an explicit rebuild is triggered.🔧 Planned Fix & Resolution Path[x] Agent Model Hardening: Refactor src/agents/react_agent.py to strictly bind and enforce active Groq model strings (e.g., openai/gpt-oss-120b or llama-3.1-8b-instant).[x] Provider Standardization: Standardize provider="groq" defaults across AutoReportGenerator (src/agents/report_generator.py) and API routers (src/api/routers/reports.py).[ ] Container Layer Invalidation: Rebuild local production API images without layer caching:Bashdocker compose -f docker-compose.prod.yml build --no-cache api
+docker compose -f docker-compose.prod.yml up -d --force-recreate api
+📄 License & MaintainerDeveloped as part of the Engineering Specialization Portfolio (Networking & Systems Engineering - GSTR / ENSA Tétouan).Maintainer: Najat El OtmaniRepository: GitHub - NajatelOtmani/airsentinel

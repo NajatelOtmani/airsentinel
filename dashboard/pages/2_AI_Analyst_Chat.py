@@ -18,7 +18,7 @@ with col_side:
     st.markdown("**Suggested Questions**")
     suggestions = [
         "Why did PM2.5 jump this morning?",
-        "Which zone has the worst air quality?",
+        "What is the health impact of the current AQI?",
         "What's the 12h forecast for LONDON_HF1?",
     ]
     for s in suggestions:
