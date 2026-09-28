@@ -26,6 +26,9 @@ services:
     env_file: .env
     environment:
       API_BASE_URL: http://api:8000
+      DEMO_MODE: "true"
+      DEMO_USERNAME: admin
+      DEMO_PASSWORD: ${DEMO_PASSWORD}
     depends_on:
       - api
     expose:
