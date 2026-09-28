@@ -1,0 +1,14 @@
+streamlit
+pandas
+numpy
+pydeck
+fpdf2
+requests
+loguru
+pydantic
+pydantic-settings
+langchain>=1.4.0,<2
+langchain-classic>=1.0.8,<2
+langchain-core
+langchain-groq>=1.1.3,<2
+langchain-google-genai
